@@ -601,7 +601,7 @@ fun PortraitVideoPager(
         mutableStateOf<com.android.purebilibili.data.model.response.AiAudioInfo?>(null)
     }
     var portraitAudioLanguage by remember { mutableStateOf<String?>(null) }
-    var portraitAspectRatio by remember { mutableStateOf(VideoAspectRatio.FIT) }
+    var portraitAspectRatio by remember { mutableStateOf(VideoAspectRatio.FILL) }
     var portraitAudioOnly by rememberSaveable { mutableStateOf(false) }
     val isPortraitLoggedIn = VideoRepository.isPlaybackLoggedIn()
     val isPortraitVip = VideoRepository.isPlaybackVip()
