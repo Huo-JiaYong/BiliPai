@@ -2795,26 +2795,44 @@ fun AppNavigation(
                 },
                 onRoute = { pushNavigation3Route(it) },
                 onPopularFeed = { target ->
-                    // 热门榜单(排行榜/入站必刷/综合热门):切回首页 POPULAR
-                    // 子分类的原生 feed,并弹回主宿主,与底栏点首页一致。
-                    // 注意顺序:先切子分类(同步写状态),再切大类(其状态更新在协程中,
-                    // 若后切子分类,switchCategory 捕获的旧快照会把子分类覆盖回去)。
-                    val homeIndex = visibleBottomBarItems.indexOf(BottomNavItem.HOME)
-                    if (homeIndex >= 0) {
-                        switchMainBottomPagerPage(homeIndex)
-                    }
-                    homeViewModel.switchPopularSubCategory(
-                        when (target.subCategoryKey) {
-                            "weekly" -> PopularSubCategory.WEEKLY
-                            "rank" -> PopularSubCategory.RANKING
-                            "all", "precious" -> PopularSubCategory.PRECIOUS
-                            else -> PopularSubCategory.COMPREHENSIVE
+                    if (navigation3BackStack.firstOrNull() != BiliPaiNavKey.MainHost) {
+                        val popularLink = buildString {
+                            append("bilibili://popular/")
+                            append(target.subCategoryKey)
+                            target.weeklyNumber?.takeIf { it > 0 }?.let { append("?number=$it") }
                         }
-                    )
-                    homeViewModel.switchCategory(HomeCategory.POPULAR)
-                    replaceNavigation3BackStack(
-                        popBiliPaiNavKeyToRoot(navigation3BackStack)
-                    )
+                        context.startActivity(
+                            android.content.Intent(context, com.android.purebilibili.MainActivity::class.java).apply {
+                                addFlags(
+                                    android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                        android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                )
+                                putExtra(com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE, popularLink)
+                            }
+                        )
+                        context.findActivity()?.finish()
+                    } else {
+                        // 热门榜单(排行榜/入站必刷/综合热门):切回首页 POPULAR
+                        // 子分类的原生 feed,并弹回主宿主,与底栏点首页一致。
+                        // 注意顺序:先切子分类(同步写状态),再切大类(其状态更新在协程中,
+                        // 若后切子分类,switchCategory 捕获的旧快照会把子分类覆盖回去)。
+                        val homeIndex = visibleBottomBarItems.indexOf(BottomNavItem.HOME)
+                        if (homeIndex >= 0) {
+                            switchMainBottomPagerPage(homeIndex)
+                        }
+                        homeViewModel.switchPopularSubCategory(
+                            when (target.subCategoryKey) {
+                                "weekly" -> PopularSubCategory.WEEKLY
+                                "rank" -> PopularSubCategory.RANKING
+                                "all", "precious" -> PopularSubCategory.PRECIOUS
+                                else -> PopularSubCategory.COMPREHENSIVE
+                            }
+                        )
+                        homeViewModel.switchCategory(HomeCategory.POPULAR)
+                        replaceNavigation3BackStack(
+                            popBiliPaiNavKeyToRoot(navigation3BackStack)
+                        )
+                    }
                 },
             )
         }
@@ -2980,7 +2998,11 @@ fun AppNavigation(
         LaunchedEffect(pendingNavigationRoute) {
             pendingNavigationRoute?.let { route ->
                 // 系统入口不使用站内点击防抖或已经记录的卡片来源。
-                if (!requestBottomPagerPageForRoute(route)) {
+                if (route.startsWith("bilibili://", ignoreCase = true) ||
+                    route.startsWith("bili://", ignoreCase = true)
+                ) {
+                    openBilibiliLinkInNavigation3(route)
+                } else if (!requestBottomPagerPageForRoute(route)) {
                     latestPushNavigation3Key.value(legacyRouteToBiliPaiNavKey(route), null)
                 }
                 onPendingNavigationRouteConsumed(route)
@@ -3236,10 +3258,31 @@ fun AppNavigation(
                         pushNavigation3Key(BiliPaiNavKey.CustomPushSettings)
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_PLAYBACK_SETTINGS ->
                         pushNavigation3Key(BiliPaiNavKey.PlaybackSettings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_DECODER_SETTINGS -> {
+                        com.android.purebilibili.feature.settings.SettingsSearchFocusController.submit(
+                            target = com.android.purebilibili.feature.settings.SettingsSearchTarget.PLAYBACK,
+                            focusId = com.android.purebilibili.feature.settings.SettingsSearchFocusIds.PLAYBACK_DECODER,
+                            settingId = "playback.hw_decode",
+                        )
+                        pushNavigation3Key(BiliPaiNavKey.PlaybackSettings)
+                    }
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_APPEARANCE_SETTINGS ->
                         pushNavigation3Key(BiliPaiNavKey.AppearanceSettings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_IMAGE_DISPLAY_SETTINGS -> {
+                        com.android.purebilibili.feature.settings.SettingsSearchFocusController.submit(
+                            target = com.android.purebilibili.feature.settings.SettingsSearchTarget.APPEARANCE,
+                            focusId = "content_image_display_title",
+                        )
+                        pushNavigation3Key(BiliPaiNavKey.AppearanceSettings)
+                    }
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_HOME_SETTINGS ->
                         pushNavigation3Key(BiliPaiNavKey.HomeSettings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_STORAGE_SETTINGS ->
+                        pushNavigation3Key(
+                            BiliPaiNavKey.SettingsCategory(
+                                com.android.purebilibili.feature.settings.SettingsRootCategory.STORAGE_BACKUP
+                            )
+                        )
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_SETTINGS ->
                         pushNavigation3Key(BiliPaiNavKey.Settings)
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_DONATE,
@@ -3279,7 +3322,12 @@ fun AppNavigation(
         ) {
             com.android.purebilibili.feature.settings.highlights.UpdateHighlightsHost(
                 allowAutomatic = !entryDialogsBlocked &&
-                    currentRoute == ScreenRoutes.Home.route && currentBottomNavItem == BottomNavItem.HOME &&
+                    com.android.purebilibili.feature.settings.highlights.isHomeRouteForAutomaticHighlights(
+                        isMainHostTop = currentNavigation3Key == BiliPaiNavKey.MainHost,
+                        isHomeBottomTab = currentBottomNavItem == BottomNavItem.HOME,
+                        currentRoute = currentRoute,
+                        homeRoute = ScreenRoutes.Home.route,
+                    ) &&
                     !foregroundSettling && !deferGlobalWallpaperPalette && !mainBottomPagerState.isNavigating &&
                     !isInPipMode && miniPlayerManager?.isPlaying != true &&
                     miniPlayerManager?.isMiniMode != true &&

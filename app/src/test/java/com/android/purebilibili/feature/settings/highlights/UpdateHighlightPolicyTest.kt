@@ -105,4 +105,57 @@ class UpdateHighlightPolicyTest {
         val auto618 = resolveAutomaticReleaseHighlights(618, upgradedNext.pendingIds, baseSettings, nextReleaseCatalog)
         assertEquals(listOf("next_release_618"), auto618.map { it.id })
     }
+
+    @Test
+    fun automaticHighlightsRecognizeNavigation3MainHostHomeTabAndRejectOtherDestinations() {
+        assertTrue(
+            isHomeRouteForAutomaticHighlights(
+                isMainHostTop = true,
+                isHomeBottomTab = true,
+                currentRoute = "main_host",
+                homeRoute = "home",
+            )
+        )
+        assertFalse(
+            isHomeRouteForAutomaticHighlights(
+                isMainHostTop = true,
+                isHomeBottomTab = false,
+                currentRoute = "main_host",
+                homeRoute = "home",
+            )
+        )
+        assertFalse(
+            isHomeRouteForAutomaticHighlights(
+                isMainHostTop = false,
+                isHomeBottomTab = true,
+                currentRoute = "settings",
+                homeRoute = "home",
+            )
+        )
+        assertTrue(
+            isHomeRouteForAutomaticHighlights(
+                isMainHostTop = false,
+                isHomeBottomTab = false,
+                currentRoute = "home",
+                homeRoute = "home",
+            )
+        )
+    }
+
+    @Test
+    fun release622HighlightsExcludePinnedDonateAndUseDistinctSemanticIcons() {
+        val highlights = latestReleaseHighlights(622)
+        assertEquals(6, highlights.size)
+        assertTrue(highlights.none { it.action == UpdateHighlightAction.OPEN_DONATE })
+        val icons = highlights.map { it.icon }
+        assertTrue(icons.all { it != null })
+        assertEquals(highlights.size, icons.toSet().size)
+    }
+
+    @Test
+    fun formatDisplayVersionNameStripsBuildVariantSuffix() {
+        assertEquals("0.10.6", formatDisplayVersionName("0.10.6-debug"))
+        assertEquals("0.10.6", formatDisplayVersionName("0.10.6-dev"))
+        assertEquals("0.10.6", formatDisplayVersionName("0.10.6"))
+    }
 }
