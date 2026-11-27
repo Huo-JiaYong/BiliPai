@@ -38,7 +38,7 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Run performance contracts and degradation behavior
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GPR_PAT }}
         run: bash scripts/ci_quality.sh performance
       - name: Upload performance diagnostics
         if: always()
@@ -71,7 +71,7 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Run preferences cache and version behavior
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GPR_PAT }}
         run: bash scripts/ci_quality.sh correctness
       - name: Upload correctness diagnostics
         if: always()
@@ -100,7 +100,7 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Run style checker regressions and report style warnings
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GPR_PAT }}
         run: bash scripts/ci_quality.sh style
       - name: Upload style diagnostics
         if: always()
